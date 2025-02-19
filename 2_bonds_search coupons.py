@@ -13,91 +13,151 @@
 # Актуальная версия скрипта всегда здесь: https://github.com/empenoso/moex-bond-search-and-analysis
 # 
 
-import requests
-import openpyxl
+import dataclasses
+import logging
+import os
+import sys
 from datetime import datetime
 
+import requests
+import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.workbook import Workbook
+
 # Настройка кодировки для корректного вывода русского текста
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
+if os.name == "nt":
+    sys.stdout.reconfigure(encoding='utf-8')
 
-# Загружаем Excel-файл
-file_path = "bonds.xlsx"
-wb = openpyxl.load_workbook(file_path)
-sheet_data = wb["Исходные данные"]
-sheet_result = wb["Ден.поток"]
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+log.addHandler(handler)
 
-# Очищаем лист с результатами
-sheet_result.delete_rows(1, sheet_result.max_row)
-sheet_result.append(["Название", "Идентификатор", "Дата выплаты", "Денежный поток, ₽ (купон | выплата номинала)"])
+@dataclasses.dataclass
+class ExcelSheets:
+    file_path: str
+    workbook: Workbook
+    data: Worksheet
+    result: Worksheet
 
-# Считываем данные из листа "Исходные данные"
-ArraySymbolQuantity = []
-for row in sheet_data.iter_rows(min_row=2, max_row=sheet_data.max_row, values_only=True):
-    if row[0] and row[1]:  # Проверяем, что данные не пустые
-        ArraySymbolQuantity.append(row)
 
-print(f"Считано {len(ArraySymbolQuantity)} облигаций для обработки.")
+def main():
+    excel_sheets = load_excel_file()
+    excel_sheets = clean_excel_sheets_result(excel_sheets=excel_sheets)
+    bonds = read_bonds(excel_sheets=excel_sheets)
+    log.info(f"Считано {len(bonds)} облигаций для обработки.")
+    cash_flow = process_bonds(bonds=bonds)
+    write_data_to_excel(excel_sheets=excel_sheets, cache_flow=cash_flow)
 
-CashFlow = []
 
-# Обрабатываем каждую облигацию
-for ID, number in ArraySymbolQuantity:
-    print(f"\nОбрабатываем {ID}, количество: {number} шт.")
-    url = f"https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/{ID}.json?iss.meta=off"
-    print(f"Запрос к {url}")
+def load_excel_file(file_path: str = "bonds.txt") -> ExcelSheets:
+    # Загружаем Excel-файл
+    file_path = "bonds.xlsx"
+    wb = openpyxl.load_workbook(file_path)
+    return ExcelSheets(file_path=file_path, workbook=wb, data=wb["Исходные данные"], result=wb["Ден.поток"])
+
+
+def clean_excel_sheets_result(excel_sheets: ExcelSheets):
+    # Очищаем лист с результатами
+    column_names = ["Название", "Идентификатор", "Дата выплаты", "Денежный поток, ₽ (купон | выплата номинала)"]
+    excel_sheets.result.delete_rows(1, excel_sheets.result.max_row)
+    excel_sheets.result.append(column_names)
+    return excel_sheets
+
+
+def read_bonds(excel_sheets: ExcelSheets) -> list[tuple[str | float | datetime | None, ...]]:
+    # Считываем данные из листа "Исходные данные"
+    def is_not_empty_data(row) -> bool:
+        return row[0] and row[1]
     
-    response = requests.get(url)
-    json_data = response.json()
-    
+    data_iterator = excel_sheets.data.iter_rows(min_row=2, max_row=excel_sheets.data.max_row, values_only=True)
+    return [row for row in data_iterator if is_not_empty_data(row)]
+
+
+def process_bonds(bonds: list[tuple[str | float | datetime | None, ...]]) -> list[list[str]]:
+    cash_flow = []
+    # Обрабатываем каждую облигацию
+    for ID, number in bonds:
+        log.info(f"Обрабатываем {ID}, количество: {number} шт.")
+        url = f"https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/{ID}.json?iss.meta=off"
+        log.info(f"Запрос к {url}")
+        
+        response = requests.get(url)
+        json_data = response.json()
+        
+        assert isinstance(number, (float, int))
+        cash_flow.extend(process_coupons(json_data.get("coupons", {}).get("data", []), number))
+        cash_flow.extend(process_payment(json_data.get("amortizations", {}).get("data", []), number))
+
+    return cash_flow
+
+
+def process_coupons(coupons: list[tuple[str | int | float, ...]], number: float | int) -> list[list[str]]:
     # Обработка купонов
-    for coupon in json_data.get("coupons", {}).get("data", []):
-        name = coupon[1].replace('"', '').replace("'", '').replace("\\", '')
+    cash_flow = []
+    for coupon in coupons:
+        name = str(coupon[1]).replace('"', '').replace("'", '').replace("\\", '')
         isin = coupon[0]
         coupon_date = coupon[3]
 
         # Преобразуем дату в объект datetime
-        coupon_datetime = datetime.strptime(coupon_date, "%Y-%m-%d")
+        coupon_datetime = datetime.strptime(str(coupon_date), "%Y-%m-%d")
 
         if coupon_datetime > datetime.now():
-            value_rub = (coupon[9] or 0) * number
-            CashFlow.append([f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub])
-            print(f"Добавлен купон: {CashFlow[-1]}")
+            value_rub = (float(coupon[9]) or 0) * number
+            flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub]
+            cash_flow.append(flow)
+            log.info(f"Добавлен купон: {flow}")
 
+    return cash_flow
+
+
+def process_payment(amortizations: list[tuple[str | int | float, ...]], number: float | int) -> list[list[str]]:
     # Обработка выплат номинала
-    for amort in json_data.get("amortizations", {}).get("data", []):
-        name = amort[1].replace('"', '').replace("'", '').replace("\\", '')
+    cash_flow = []
+    for amort in amortizations:
+        name = str(amort[1]).replace('"', '').replace("'", '').replace("\\", '')
         isin = amort[0]
         amort_date = amort[3]
 
         # Преобразуем дату в объект datetime
-        amort_datetime = datetime.strptime(amort_date, "%Y-%m-%d")
+        amort_datetime = datetime.strptime(str(amort_date), "%Y-%m-%d")
 
         if amort_datetime > datetime.now():
-            value_rub = (amort[9] or 0) * number
-            CashFlow.append([f"{name} (номинал 💯)", isin, amort_datetime, value_rub])
-            print(f"Добавлена выплата номинала: {CashFlow[-1]}")
+            value_rub = (float(amort[9]) or 0) * number
+            flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub]
+            cash_flow.append(flow)
+            log.info(f"Добавлена выплата номинала: {flow}")
 
-# Записываем данные в Excel
-for row in CashFlow:
-    sheet_result.append(row)
+    return cash_flow
 
-# Устанавливаем формат ячеек
-for cell in sheet_result["C"][1:]:  # Пропускаем заголовок
-    cell.number_format = "DD.MM.YYYY"
 
-for cell in sheet_result["D"][1:]:
-    cell.number_format = '# ##0,00 ₽'
+def write_data_to_excel(excel_sheets: ExcelSheets, cache_flow: list[list[str]]):
+    # Записываем данные в Excel
+    for row in cache_flow:
+        excel_sheets.result.append(row)
 
-# Добавляем запись об обновлении
-update_message = f"\nДанные автоматически обновлены {datetime.now().strftime('%d.%m.%Y в %H:%M:%S')}"
-sheet_result.append(["", update_message])
-print(update_message)
+    # Устанавливаем формат ячеек
+    for cell in excel_sheets.result["C"][1:]:  # Пропускаем заголовок
+        cell.number_format = "DD.MM.YYYY"
 
-# Сохраняем изменения в файле
-wb.save(file_path)
-print(f"Файл {file_path} успешно обновлён.")
-print("\nМихаил Шардин https://shardin.name/\n")
+    for cell in excel_sheets.result["D"][1:]:
+        cell.number_format = '# ##0,00 ₽'
 
-# В конце скрипта
-input("Нажмите любую клавишу для выхода...")
+    # Добавляем запись об обновлении
+    update_message = f"Данные автоматически обновлены {datetime.now().strftime('%d.%m.%Y в %H:%M:%S')}"
+    excel_sheets.result.append(["", update_message])
+    log.info(update_message)
+
+    # Сохраняем изменения в файле
+    excel_sheets.workbook.save(excel_sheets.file_path)
+    log.info(f"Файл {excel_sheets.file_path} успешно обновлён.")
+    log.info("Михаил Шардин https://shardin.name/\n")
+
+
+if __name__ == "__main__":
+    main()
+    # В конце скрипта
+    input("Нажмите клавишу Enter для выхода...")
