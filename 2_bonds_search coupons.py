@@ -13,13 +13,15 @@
 # Актуальная версия скрипта всегда здесь: https://github.com/empenoso/moex-bond-search-and-analysis
 # 
 
+import os
 import requests
 import openpyxl
 from datetime import datetime
 
 # Настройка кодировки для корректного вывода русского текста
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
+if os.name == "nt":
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Загружаем Excel-файл
 file_path = "bonds.xlsx"
