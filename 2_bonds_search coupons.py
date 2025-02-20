@@ -102,9 +102,10 @@ def process_bonds(bonds: list[tuple[str | float | datetime | None, ...]]) -> lis
         json_data = response.json()
         
         assert isinstance(number, (float, int))
-        cash_flow.extend(process_payment(json_data.get("amortizations", {}).get("data", []), number))
         coupons = json_data.get("coupons", {})
+        amortizations = json_data.get("amortizations", {})
         cash_flow.extend(process_coupons(coupons.get("data", []), coupons.get("columns", []), number))
+        cash_flow.extend(process_payment(amortizations.get("data", []), amortizations.get("columns", []), number))
 
     return cash_flow
 
@@ -135,19 +136,25 @@ def process_coupons(coupons: list[tuple[str | int | float, ...]], columns: list[
     return cash_flow
 
 
-def process_payment(amortizations: list[tuple[str | int | float, ...]], number: float | int) -> list[list[str]]:
+def process_payment(amortizations: list[tuple[str | int | float, ...]], columns: list[str], number: float | int) -> list[list[str]]:
     # Обработка выплат номинала
     cash_flow = []
+
+    isin_idx = columns.index("isin")
+    name_idx = columns.index("name")
+    amortdate_idx = columns.index("amortdate")
+    value_rub_idx = columns.index("value_rub")
+
     for amort in amortizations:
-        name = str(amort[1]).replace('"', '').replace("'", '').replace("\\", '')
-        isin = amort[0]
-        amort_date = amort[3]
+        name = str(amort[name_idx]).replace('"', '').replace("'", '').replace("\\", '')
+        isin = amort[isin_idx]
+        amort_date = amort[amortdate_idx]
 
         # Преобразуем дату в объект datetime
         amort_datetime = datetime.strptime(str(amort_date), "%Y-%m-%d")
 
         if amort_datetime > datetime.now():
-            value_rub = float(amort[9] or 0) * number
+            value_rub = float(amort[value_rub_idx] or 0) * number
             flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub]
             cash_flow.append(flow)
             log.info(f"Добавлена выплата номинала: {flow}")
