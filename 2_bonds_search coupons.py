@@ -26,14 +26,26 @@ from openpyxl.workbook import Workbook
 
 # Настройка кодировки для корректного вывода русского текста
 if os.name == "nt":
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding="utf-8")
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-log.addHandler(handler)
+empty_log = logging.getLogger("empty")
+
+def setup_logging():
+    log.setLevel(logging.INFO)
+    empty_log.setLevel(logging.INFO)
+
+    handler = logging.StreamHandler(sys.stdout)
+    empty_handler = logging.StreamHandler(sys.stdout)
+
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    empty_formater = logging.Formatter("")
+
+    handler.setFormatter(formatter)
+    empty_handler.setFormatter(empty_formater)
+
+    log.addHandler(handler)
+    empty_log.addHandler(empty_handler)
 
 @dataclasses.dataclass
 class ExcelSheets:
@@ -44,6 +56,7 @@ class ExcelSheets:
 
 
 def main():
+    setup_logging()
     excel_sheets = load_excel_file()
     excel_sheets = clean_excel_sheets_result(excel_sheets=excel_sheets)
     bonds = read_bonds(excel_sheets=excel_sheets)
@@ -80,6 +93,7 @@ def process_bonds(bonds: list[tuple[str | float | datetime | None, ...]]) -> lis
     cash_flow = []
     # Обрабатываем каждую облигацию
     for ID, number in bonds:
+        empty_log.info("")
         log.info(f"Обрабатываем {ID}, количество: {number} шт.")
         url = f"https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/{ID}.json?iss.meta=off"
         log.info(f"Запрос к {url}")
