@@ -120,7 +120,7 @@ def process_coupons(coupons: list[tuple[str | int | float, ...]], number: float 
         coupon_datetime = datetime.strptime(str(coupon_date), "%Y-%m-%d")
 
         if coupon_datetime > datetime.now():
-            value_rub = (float(coupon[9]) or 0) * number
+            value_rub = float(coupon[9] or 0) * number
             flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub]
             cash_flow.append(flow)
             log.info(f"Добавлен купон: {flow}")
@@ -140,7 +140,7 @@ def process_payment(amortizations: list[tuple[str | int | float, ...]], number: 
         amort_datetime = datetime.strptime(str(amort_date), "%Y-%m-%d")
 
         if amort_datetime > datetime.now():
-            value_rub = (float(amort[9]) or 0) * number
+            value_rub = float(amort[9] or 0) * number
             flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub]
             cash_flow.append(flow)
             log.info(f"Добавлена выплата номинала: {flow}")
