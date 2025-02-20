@@ -1,0 +1,10 @@
+[project]
+name = "moex-bond-search-and-analysis"
+version = "0.1.0"
+description = "Поиск ликвидных облигаций на Московской Бирже и их анализ"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "requests>=2.32.3",
+]
