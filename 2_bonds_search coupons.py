@@ -102,25 +102,32 @@ def process_bonds(bonds: list[tuple[str | float | datetime | None, ...]]) -> lis
         json_data = response.json()
         
         assert isinstance(number, (float, int))
-        cash_flow.extend(process_coupons(json_data.get("coupons", {}).get("data", []), number))
         cash_flow.extend(process_payment(json_data.get("amortizations", {}).get("data", []), number))
+        coupons = json_data.get("coupons", {})
+        cash_flow.extend(process_coupons(coupons.get("data", []), coupons.get("columns", []), number))
 
     return cash_flow
 
 
-def process_coupons(coupons: list[tuple[str | int | float, ...]], number: float | int) -> list[list[str]]:
+def process_coupons(coupons: list[tuple[str | int | float, ...]], columns: list[str], number: float | int) -> list[list[str]]:
     # Обработка купонов
     cash_flow = []
+
+    isin_idx = columns.index("isin")
+    name_idx = columns.index("name")
+    coupondate_idx = columns.index("coupondate")
+    value_rub_idx = columns.index("value_rub")
+
     for coupon in coupons:
-        name = str(coupon[1]).replace('"', '').replace("'", '').replace("\\", '')
-        isin = coupon[0]
-        coupon_date = coupon[3]
+        name = str(coupon[name_idx]).replace('"', '').replace("'", '').replace("\\", '')
+        isin = coupon[isin_idx]
+        coupon_date = coupon[coupondate_idx]
 
         # Преобразуем дату в объект datetime
         coupon_datetime = datetime.strptime(str(coupon_date), "%Y-%m-%d")
 
         if coupon_datetime > datetime.now():
-            value_rub = float(coupon[9] or 0) * number
+            value_rub = float(coupon[value_rub_idx] or 0) * number
             flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub]
             cash_flow.append(flow)
             log.info(f"Добавлен купон: {flow}")
