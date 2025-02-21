@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 
 .python-version
+.vscode
+news_*
