@@ -76,6 +76,15 @@ wheels = [
 ]
 
 [[package]]
+name = "humanize"
+version = "4.12.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/8c/4f2f0784d08a383b5de3d3b1d65a6f204cc5dc487621c91c550388d756af/humanize-4.12.1.tar.gz", hash = "sha256:1338ba97415c96556758a6e2f65977ed406dddf4620d4c6db9bbdfd07f0f1232", size = 80827 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/30/5ef5994b090398f9284d2662f56853e5183ae2cb5d8e3db67e4f4cfea407/humanize-4.12.1-py3-none-any.whl", hash = "sha256:86014ca5c52675dffa1d404491952f1f5bf03b07c175a51891a343daebf01fea", size = 127409 },
+]
+
+[[package]]
 name = "idna"
 version = "3.10"
 source = { registry = "https://pypi.org/simple" }
@@ -91,8 +100,10 @@ source = { virtual = "." }
 dependencies = [
     { name = "emoji" },
     { name = "feedparser" },
+    { name = "humanize" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "python-dateutil" },
     { name = "requests" },
 ]
 
@@ -100,8 +111,10 @@ dependencies = [
 requires-dist = [
     { name = "emoji", specifier = ">=2.14.1" },
     { name = "feedparser", specifier = ">=6.0.11" },
+    { name = "humanize", specifier = ">=4.12.1" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.2.3" },
+    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
     { name = "requests", specifier = ">=2.32.3" },
 ]
 
