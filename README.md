@@ -83,9 +83,10 @@ uv sync
 
 #### (📦 При альтернативной установке) Запуск с помощью пакетного менеджера
 ```bash
-uv run python 1_bonds_search by criteria.py
+uv run python src/cli.py
 uv run python 2_bonds_search coupons.py
-uv run python 3_bonds_news search_beta.py
+uv run python 3_bonds_news search.py
+uv run python 4_bonds_calculation purchase volume.py
 ```
 
 ## 🏆 Альтернативные JavaScript версии
