@@ -14,9 +14,7 @@
 # 
 
 import dataclasses
-import logging
-import os
-import sys
+import bonds_utils
 from datetime import datetime
 
 import requests
@@ -24,28 +22,6 @@ import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.workbook import Workbook
 
-# Настройка кодировки для корректного вывода русского текста
-if os.name == "nt":
-    sys.stdout.reconfigure(encoding="utf-8")
-
-log = logging.getLogger(__name__)
-empty_log = logging.getLogger("empty")
-
-def setup_logging():
-    log.setLevel(logging.INFO)
-    empty_log.setLevel(logging.INFO)
-
-    handler = logging.StreamHandler(sys.stdout)
-    empty_handler = logging.StreamHandler(sys.stdout)
-
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    empty_formater = logging.Formatter("")
-
-    handler.setFormatter(formatter)
-    empty_handler.setFormatter(empty_formater)
-
-    log.addHandler(handler)
-    empty_log.addHandler(empty_handler)
 
 @dataclasses.dataclass
 class ExcelSheets:
@@ -56,11 +32,11 @@ class ExcelSheets:
 
 
 def main():
-    setup_logging()
+    bonds_utils.setup_encoding()
     excel_sheets = load_excel_file()
     excel_sheets = clean_excel_sheets_result(excel_sheets=excel_sheets)
     bonds = read_bonds(excel_sheets=excel_sheets)
-    log.info(f"Считано {len(bonds)} облигаций для обработки.")
+    bonds_utils.log.info(f"Считано {len(bonds)} облигаций для обработки.")
     cash_flow = process_bonds(bonds=bonds)
     write_data_to_excel(excel_sheets=excel_sheets, cache_flow=cash_flow)
 
@@ -93,10 +69,10 @@ def process_bonds(bonds: list[tuple[str | float | datetime | None, ...]]) -> lis
     cash_flow = []
     # Обрабатываем каждую облигацию
     for ID, number in bonds:
-        empty_log.info("")
-        log.info(f"Обрабатываем {ID}, количество: {number} шт.")
+        bonds_utils.empty_log.info("")
+        bonds_utils.log.info(f"Обрабатываем {ID}, количество: {number} шт.")
         url = f"https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/{ID}.json?iss.meta=off"
-        log.info(f"Запрос к {url}")
+        bonds_utils.log.info(f"Запрос к {url}")
         
         response = requests.get(url)
         json_data = response.json()
@@ -131,7 +107,7 @@ def process_coupons(coupons: list[tuple[str | int | float, ...]], columns: list[
             value_rub = float(coupon[value_rub_idx] or 0) * number
             flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub]
             cash_flow.append(flow)
-            log.info(f"Добавлен купон: {flow}")
+            bonds_utils.log.info(f"Добавлен купон: {flow}")
 
     return cash_flow
 
@@ -157,7 +133,7 @@ def process_payment(amortizations: list[tuple[str | int | float, ...]], columns:
             value_rub = float(amort[value_rub_idx] or 0) * number
             flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub]
             cash_flow.append(flow)
-            log.info(f"Добавлена выплата номинала: {flow}")
+            bonds_utils.log.info(f"Добавлена выплата номинала: {flow}")
 
     return cash_flow
 
@@ -177,15 +153,15 @@ def write_data_to_excel(excel_sheets: ExcelSheets, cache_flow: list[list[str]]):
     # Добавляем запись об обновлении
     update_message = f"Данные автоматически обновлены {datetime.now().strftime('%d.%m.%Y в %H:%M:%S')}"
     excel_sheets.result.append(["", update_message])
-    log.info(update_message)
+    bonds_utils.log.info(update_message)
 
     # Сохраняем изменения в файле
     excel_sheets.workbook.save(excel_sheets.file_path)
-    log.info(f"Файл {excel_sheets.file_path} успешно обновлён.")
-    log.info("Михаил Шардин https://shardin.name/\n")
+    bonds_utils.log.info(f"Файл {excel_sheets.file_path} успешно обновлён.")
 
 
 if __name__ == "__main__":
     main()
     # В конце скрипта
+    print("\nМихаил Шардин https://shardin.name/\n")
     input("Нажмите клавишу Enter для выхода...")
