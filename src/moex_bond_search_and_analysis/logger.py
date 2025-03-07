@@ -28,6 +28,6 @@ class Logger:
         self.log.info(message)
 
 
-main_log = Logger(name="main", format="%(asctime)s - %(levelname)s - %(message)s", store=True)
+# main_log = Logger(name="main", format="%(asctime)s - %(levelname)s - %(message)s", store=True)
 like_print_log = Logger(name="main", format="%(message)s", store=True)
-empty_log = Logger(name="empty", format="", store=False)
+# empty_log = Logger(name="empty", format="", store=False)

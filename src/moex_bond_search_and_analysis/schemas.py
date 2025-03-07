@@ -2,6 +2,9 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Literal
 
+from openpyxl.workbook import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
+
 from moex_bond_search_and_analysis.consts import MONTH_NAMES_RU_SHORT
 
 
@@ -64,3 +67,10 @@ class SearchByCriteriaConditions:
 class MonthsOfPayments:
     value_rub_null: int
     months_payment_marks: dict[str, str]
+
+
+@dataclass
+class ExcelSheets:
+    workbook: Workbook
+    data: Worksheet
+    result: Worksheet

@@ -18,10 +18,8 @@ import os
 import sys
 sys.path.append(f"{os.getcwd()}/src")
 
-from moex_bond_search_and_analysis.app import App
+from cli import start
 
 
 if __name__ == "__main__":
-    App().search_by_criteria()
-    print("\nМихаил Шардин https://shardin.name/\n")
-    input("Нажмите Enter для выхода...")
+    start(1)

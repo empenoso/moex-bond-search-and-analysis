@@ -337,3 +337,73 @@ class MOEX:
         except Exception as e:
             self.log.info(f"🔥 Непредвиденная ошибка c {security_id} в {foo_name}: {e}") 
             return 'ошибка'  # Return some error indicator
+
+    def process_bonds(self, bonds: list[tuple[str | float | datetime | None, ...]]) -> list[list[str]]:
+        cash_flow = []
+        # Обрабатываем каждую облигацию
+        for ID, number in bonds:
+            self.log.info("")
+            self.log.info(f"Обрабатываем {ID}, количество: {number} шт.")
+            url = f"https://iss.moex.com/iss/statistics/engines/stock/markets/bonds/bondization/{ID}.json?iss.meta=off"
+            self.log.info(f"Запрос к {url}")
+            
+            response = requests.get(url)
+            json_data = response.json()
+            
+            assert isinstance(number, (float, int))
+            coupons = json_data.get("coupons", {})
+            amortizations = json_data.get("amortizations", {})
+            cash_flow.extend(self.process_coupons(coupons.get("data", []), coupons.get("columns", []), number))
+            cash_flow.extend(self.process_payment(amortizations.get("data", []), amortizations.get("columns", []), number))
+
+        return cash_flow
+
+    def process_coupons(self, coupons: list[tuple[str | int | float, ...]], columns: list[str], number: float | int) -> list[list[str]]:
+        # Обработка купонов
+        cash_flow = []
+
+        isin_idx = columns.index("isin")
+        name_idx = columns.index("name")
+        coupondate_idx = columns.index("coupondate")
+        value_rub_idx = columns.index("value_rub")
+
+        for coupon in coupons:
+            name = str(coupon[name_idx]).replace('"', '').replace("'", '').replace("\\", '')
+            isin = coupon[isin_idx]
+            coupon_date = coupon[coupondate_idx]
+
+            # Преобразуем дату в объект datetime
+            coupon_datetime = datetime.strptime(str(coupon_date), "%Y-%m-%d")
+
+            if coupon_datetime > datetime.now():
+                value_rub = float(coupon[value_rub_idx] or 0) * number
+                flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub]
+                cash_flow.append(flow)
+                self.log.info(f"Добавлен купон: {flow}")
+
+        return cash_flow
+
+    def process_payment(self, amortizations: list[tuple[str | int | float, ...]], columns: list[str], number: float | int) -> list[list[str]]:
+        # Обработка выплат номинала
+        cash_flow = []
+
+        isin_idx = columns.index("isin")
+        name_idx = columns.index("name")
+        amortdate_idx = columns.index("amortdate")
+        value_rub_idx = columns.index("value_rub")
+
+        for amort in amortizations:
+            name = str(amort[name_idx]).replace('"', '').replace("'", '').replace("\\", '')
+            isin = amort[isin_idx]
+            amort_date = amort[amortdate_idx]
+
+            # Преобразуем дату в объект datetime
+            amort_datetime = datetime.strptime(str(amort_date), "%Y-%m-%d")
+
+            if amort_datetime > datetime.now():
+                value_rub = float(amort[value_rub_idx] or 0) * number
+                flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub]
+                cash_flow.append(flow)
+                self.log.info(f"Добавлена выплата номинала: {flow}")
+
+        return cash_flow
