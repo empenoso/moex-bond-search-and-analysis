@@ -9,13 +9,42 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from moex_bond_search_and_analysis.consts import DATETIME_FORMAT, MONTH_NAMES_RU_FULL
 from moex_bond_search_and_analysis.logger import Logger
-from moex_bond_search_and_analysis.schemas import Bond, SearchByCriteriaConditions
+from moex_bond_search_and_analysis.schemas import Bond, ExcelSheets, SearchByCriteriaConditions
 
 
 class ExcelSource:
 
     def __init__(self, filename: str) -> None:
         self.filename = filename
+
+    def load_bonds(self) -> ExcelSheets:
+        wb = openpyxl.load_workbook(self.filename)
+        bonds = ExcelSheets(workbook=wb, data=wb["Исходные данные"], result=wb["Ден.поток"])
+        # Очищаем лист с результатами
+        column_names = ["Название", "Идентификатор", "Дата выплаты", "Денежный поток, ₽ (купон | выплата номинала)"]
+        bonds.result.delete_rows(1, bonds.result.max_row)
+        bonds.result.append(column_names)
+        return bonds
+
+    def write_bonds(self, sheets: ExcelSheets, cache_flow: list[list[str]], log: Logger):
+        for row in cache_flow:
+            sheets.result.append(row)
+
+        # Устанавливаем формат ячеек
+        for cell in sheets.result["C"][1:]:  # Пропускаем заголовок
+            cell.number_format = "DD.MM.YYYY"  # TODO: использовать константу
+
+        for cell in sheets.result["D"][1:]:
+            cell.number_format = '# ##0,00 ₽'
+
+        # Добавляем запись об обновлении
+        update_message = f"Данные автоматически обновлены {datetime.now().strftime('%d.%m.%Y в %H:%M:%S')}"
+        sheets.result.append(["", update_message])
+        log.info(update_message)
+
+        # Сохраняем изменения в файле
+        sheets.workbook.save(self.filename)
+        log.info(f"Файл {self.filename} успешно обновлён.")
     
     def write_search_by_criteria(self, data: list[Bond], conditions: SearchByCriteriaConditions, log: Logger) -> None:
         wb = openpyxl.Workbook()
