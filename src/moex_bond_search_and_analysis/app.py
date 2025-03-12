@@ -1,10 +1,15 @@
 from datetime import datetime
 
+import emoji
+import pandas as pd
+import time
+
 from moex_bond_search_and_analysis.moex import MOEX
+from moex_bond_search_and_analysis.news import google_search, write_to_file
 from moex_bond_search_and_analysis.plugins.excel import ExcelSource
 from moex_bond_search_and_analysis.logger import like_print_log
 from moex_bond_search_and_analysis.schemas import SearchByCriteriaConditions
-from moex_bond_search_and_analysis.utils import measure_method_duration
+from moex_bond_search_and_analysis.utils import create_news_folder, measure_method_duration
 
 
 class App:
@@ -31,3 +36,18 @@ class App:
         cash_flow = self.moex.process_bonds(bonds=bonds)
         bounds_source.write_bonds(sheets=bond_sheets, cache_flow=cash_flow, log=self.log)
 
+    @measure_method_duration
+    def search_news(self):
+        delay_between_calls = 3  # секунды
+        self.log.info("📂 Загружаем данные из Excel...")
+        df = pd.read_excel("bonds.xlsx", sheet_name="Исходные данные")
+        self.log.info(f"✅ Найдено {len(df)} записей")
+        company_names = self.moex.fetch_company_names(df)
+        news_folder_path = create_news_folder()
+        for company in company_names:
+            news = google_search(company, self.log)
+            write_to_file(news_folder_path, company, news)
+            self.log.info(emoji.emojize(f"✍️ Сохранено новостей: {len(news)} для {company}"))
+            time.sleep(delay_between_calls)
+
+        self.log.info("🎉 Обработка завершена!")

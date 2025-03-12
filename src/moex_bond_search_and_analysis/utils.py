@@ -25,3 +25,12 @@ def measure_method_duration(foo: Callable) -> Callable:
         self.log.info(f"⏳ Время выполнения {foo.__name__}: {duration}.")
         return result
     return wrapper
+
+
+def create_news_folder() -> str:
+    """📂 Создаёт папку для сохранения новостей."""
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    folder_path = f"news_{current_date}"
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    return folder_path

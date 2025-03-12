@@ -74,3 +74,11 @@ class ExcelSheets:
     workbook: Workbook
     data: Worksheet
     result: Worksheet
+
+
+@dataclass
+class NewsItem:
+    source: str
+    title: str
+    date: datetime
+    url: str

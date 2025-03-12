@@ -1,6 +1,8 @@
 import time
+import re
 from datetime import datetime, timedelta
 
+import pandas as pd
 import requests
 
 from moex_bond_search_and_analysis.consts import DATE_FORMAT, MONTH_NAMES_RU_SHORT
@@ -407,3 +409,36 @@ class MOEX:
                 self.log.info(f"Добавлена выплата номинала: {flow}")
 
         return cash_flow
+
+    def fetch_company_names(self, df: pd.DataFrame) -> list[str]:
+        """🔄 Получает названия компаний по тикерам облигаций."""
+        company_names = []
+        delay_between_calls = 0.5  # секунды
+        for ticker in df.iloc[:, 0]:
+            url = f"https://iss.moex.com/iss/securities.json?q={ticker}&iss.meta=off"
+            self.log.info(f"\n🔍 Обрабатываем тикер: {ticker}")
+
+            try:
+                response = requests.get(url)
+                response.raise_for_status()
+                data = response.json()
+
+                if not data["securities"]["data"]:
+                    self.log.info(f"⚠️ Данные не найдены для {ticker}")
+                    continue
+
+                emitent_title = data["securities"]["data"][0][8]
+                match = re.search(r'"([^"]+)"', emitent_title)
+                company_name = match.group(1) if match else emitent_title
+
+                company_names.append(company_name)
+                self.log.info(f"✅ {emitent_title} → {company_name}")
+            
+            except (requests.RequestException, IndexError, KeyError) as e:
+                self.log.info(f"❌ Ошибка при обработке {ticker}: {e}")
+
+            time.sleep(delay_between_calls)
+
+        # 🔄 Удаляем дубликаты, сохраняя порядок
+        company_names = list(dict.fromkeys(company_names))
+        return company_names
