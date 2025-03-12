@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 import emoji
 import pandas as pd
@@ -51,3 +52,92 @@ class App:
             time.sleep(delay_between_calls)
 
         self.log.info("🎉 Обработка завершена!")
+
+    @measure_method_duration
+    def calc_purchase_volume(self, available_money: int = 700_000):
+        self.log.info(f"💵 Доступная сумма: {available_money} руб.")
+        results = self._calculate_bonds_distribution(available_money)
+        # Вывод итогового распределения средств
+        if results:
+            total_spent = sum(r['money_spent'] for r in results)
+            self.log.info("\n📊 Итоговое распределение:")
+            self.log.info(f"Всего потрачено: {total_spent:.2f} руб.")
+            self.log.info(f"Остаток: {(available_money - total_spent):.2f} руб.")
+
+
+    def _calculate_bonds_distribution(self, available_money: int) -> list[dict[str, Any]]:
+        """
+        # Расчет равномерного распределения средств между облигациями
+        """
+        self.log.info("📊 Чтение списка облигаций из файла Excel...")
+        df = pd.read_excel('bonds.xlsx', sheet_name='Исходные данные', usecols='A')
+        bonds_list = df.iloc[:, 0].tolist()
+        
+        # Собираем информацию о всех облигациях
+        valid_bonds = []
+        for bond in bonds_list:
+            self.log.info(f"\n🔍 Получение данных для облигации {bond}...")
+            price, nkd, date = self.moex.get_bond_price(bond)
+            
+            if price is not None and nkd is not None:
+                valid_bonds.append({
+                    'bond': bond,
+                    'price': price,
+                    'nkd': nkd,
+                    'total_cost': price + nkd,
+                    'price_date': date
+                })
+        
+        if not valid_bonds:
+            self.log.info("❌ Нет доступных облигаций для покупки")
+            return []
+        
+        # Расчет равного распределения денег
+        num_bonds = len(valid_bonds)
+        money_per_bond = available_money / num_bonds
+        self.log.info(f"\n💰 Распределение {available_money} руб. между {num_bonds} облигациями")
+        self.log.info(f"💵 Сумма на каждую облигацию: {money_per_bond:.2f} руб.")
+        
+        # Расчет количества каждой облигации
+        results = []
+        for bond_info in valid_bonds:
+            num_bonds = int(money_per_bond // bond_info['total_cost'])
+            actual_money = num_bonds * bond_info['total_cost']
+            
+            results.append({
+                'bond': bond_info['bond'],
+                'quantity': num_bonds,
+                'price': bond_info['price'],
+                'nkd': bond_info['nkd'],
+                'total_cost': bond_info['total_cost'],
+                'money_spent': actual_money,
+                'price_date': bond_info['price_date']
+            })
+            
+            self.log.info(f"\n📈 Облигация {bond_info['bond']}:")
+            self.log.info(f"   Данные актуальны на: {bond_info['price_date']}")
+            self.log.info(f"   Цена: {bond_info['price']:.2f} руб.")
+            self.log.info(f"   НКД: {bond_info['nkd']:.2f} руб.")
+            self.log.info(f"   Полная стоимость одной облигации: {bond_info['total_cost']:.2f} руб.")
+            self.log.info(f"   Количество к покупке: {num_bonds} шт.")
+            self.log.info(f"   Сумма к расходу: {actual_money:.2f} руб.")
+        
+        # Создание нового DataFrame для результатов
+        results_df = pd.DataFrame({
+            'Код ценной бумаги': [r['bond'] for r in results],
+            'Данные актуальны на': [r['price_date'] for r in results],
+            'Цена, руб.': [r['price'] for r in results],
+            'НКД, руб.': [r['nkd'] for r in results],
+            'Полная стоимость одной облигации, руб.': [r['total_cost'] for r in results],
+            'Количество к покупке, шт.': [r['quantity'] for r in results],
+            'Сумма к расходу, руб.': [r['money_spent'] for r in results]
+        })
+        
+        # Сохраняем результаты в новый файл
+        self.log.info("\n📝 Запись результатов в Excel...")
+        results_df.to_excel('bonds_calculation purchase volume.xlsx', 
+                        sheet_name='Расчет', 
+                        index=False)
+        self.log.info("✅ Результаты сохранены в файл 'bonds_calculation purchase volume.xlsx'")
+        
+        return results

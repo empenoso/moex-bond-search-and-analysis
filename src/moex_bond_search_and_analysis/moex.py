@@ -1,3 +1,4 @@
+import json
 import time
 import re
 from datetime import datetime, timedelta
@@ -442,3 +443,36 @@ class MOEX:
         # 🔄 Удаляем дубликаты, сохраняя порядок
         company_names = list(dict.fromkeys(company_names))
         return company_names
+
+    def get_bond_price(self, security_code: str) -> tuple[None | float, None | float, None | str]:
+        """
+        # Получение текущей цены облигации и накопленного купонного дохода
+        # С попытками получить данные за предыдущие дни при отсутствии текущих данных
+        """
+        current_date = datetime.now()
+        
+        for attempt in range(10):
+            try_date = current_date - timedelta(days=attempt)
+            date_str = try_date.strftime('%Y-%m-%d')
+            
+            self.log.info(f"🔄 Попытка {attempt + 1}: запрос данных за {date_str}")
+            
+            price_url = f"https://iss.moex.com/iss/history/engines/stock/markets/bonds/boards/TQCB/securities/{security_code}.json?iss.meta=off&iss.json=extended&callback=JSON_CALLBACK&lang=ru&from={date_str}"
+            response = requests.get(price_url)
+            data = json.loads(response.text.replace('JSON_CALLBACK(', '').rstrip(')'))
+            
+            if data[1]['history']:
+                self.log.info(f"✅ Найдены данные за {date_str}")
+                close_price = data[1]['history'][0]['CLOSE']
+                face_value = data[1]['history'][0]['FACEVALUE']
+                current_price = close_price * face_value / 100
+                
+                nkd_url = f"https://iss.moex.com/iss/engines/stock/markets/bonds/boards/TQCB/securities/{security_code}.json?iss.meta=off&iss.only=securities&lang=ru"
+                response = requests.get(nkd_url)
+                data = json.loads(response.text)
+                accrued_interest = data['securities']['data'][0][7]
+                
+                return current_price, accrued_interest, date_str
+        
+        self.log.info(f"❌ Не удалось найти данные для {security_code} за последние 10 дней")
+        return None, None, None
