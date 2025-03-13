@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Поиск ликвидных облигаций на Московской Бирже и их анализ"
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
     "emoji>=2.14.1",
     "feedparser>=6.0.11",
@@ -12,4 +13,9 @@ dependencies = [
     "pandas>=2.2.3",
     "python-dateutil>=2.9.0.post0",
     "requests>=2.32.3",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.10",
 ]
