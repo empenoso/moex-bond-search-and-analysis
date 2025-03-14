@@ -17,27 +17,61 @@ class Bond:
     volume: int = field(metadata={"description": "Объем сделок с 15 дней, шт."})
     yield_: float = field(metadata={"description": "Доходность"})
     duration: float = field(metadata={"description": "Дюрация, месяцев"})
-    payments_data: dict[str, str] = field(metadata={"description": "Отметки о выплатах"})
+    payments_data: dict[str, str] = field(
+        metadata={"description": "Отметки о выплатах"}
+    )
 
     @property
     def as_list(self):
-        lst = [self.name, self.secid, self.is_qualified_investors, self.price, self.volume, self.yield_, self.duration]
+        lst = [
+            self.name,
+            self.secid,
+            self.is_qualified_investors,
+            self.price,
+            self.volume,
+            self.yield_,
+            self.duration,
+        ]
         lst.extend(
-            [self.payments_data.get(month, "") for month in MONTH_NAMES_RU_SHORT]  # Получаем отметки в порядке месяцев
+            [
+                self.payments_data.get(month, "") for month in MONTH_NAMES_RU_SHORT
+            ]  # Получаем отметки в порядке месяцев
         )
         return lst
 
 
 @dataclass
 class SearchByCriteriaConditions:
-    yield_more: int = field(default=15, metadata={"description": "Доходность больше этой цифры"})
-    yield_less: int = field(default=40, metadata={"description": "Доходность меньше этой цифры"})
-    price_more: int = field(default=70, metadata={"description": "Цена больше этой цифры"})
-    price_less: int = field(default=120, metadata={"description": "Цена меньше этой цифры"})
-    duration_more: int = field(default=3, metadata={"description": "Дюрация больше этой цифры"})
-    duration_less: int = field(default=18, metadata={"description": "Дюрация меньше этой цифры"})
-    volume_more: int = field(default=2000, metadata={"description": "Объем сделок в каждый из n дней, шт. больше этой цифры"})
-    bond_volume_more: int = field(default=60000, metadata={"description": "Совокупный объем сделок за n дней, шт. больше этой цифры"})
+    yield_more: int = field(
+        default=15, metadata={"description": "Доходность больше этой цифры"}
+    )
+    yield_less: int = field(
+        default=40, metadata={"description": "Доходность меньше этой цифры"}
+    )
+    price_more: int = field(
+        default=70, metadata={"description": "Цена больше этой цифры"}
+    )
+    price_less: int = field(
+        default=120, metadata={"description": "Цена меньше этой цифры"}
+    )
+    duration_more: int = field(
+        default=3, metadata={"description": "Дюрация больше этой цифры"}
+    )
+    duration_less: int = field(
+        default=18, metadata={"description": "Дюрация меньше этой цифры"}
+    )
+    volume_more: int = field(
+        default=2000,
+        metadata={
+            "description": "Объем сделок в каждый из n дней, шт. больше этой цифры"
+        },
+    )
+    bond_volume_more: int = field(
+        default=60000,
+        metadata={
+            "description": "Совокупный объем сделок за n дней, шт. больше этой цифры"
+        },
+    )
     offer_yes_no: Literal["ДА", "НЕТ"] = field(
         default="ДА",
         metadata={
@@ -46,7 +80,7 @@ class SearchByCriteriaConditions:
                 "ДА - облигации только с известными цифрами выплаты купонов\n"
                 "НЕТ - не важно, пусть в какие-то даты вместо выплаты прочерк"
             )
-        }
+        },
     )
 
     @property

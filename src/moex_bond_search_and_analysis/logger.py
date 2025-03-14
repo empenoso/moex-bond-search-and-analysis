@@ -6,7 +6,7 @@ class Logger:
     def __init__(self, name: str, format: str, store: bool = True):
         self.log = self.__get_logger(name, format)
         self.messages = [] if store else None
-    
+
     def __get_logger(self, name: str, format: str) -> logging.Logger:
         handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter(format)
@@ -16,7 +16,7 @@ class Logger:
         log.setLevel(logging.INFO)
         log.addHandler(handler)
         return log
-    
+
     def info(self, message: str):
         if self.messages is not None:
             if message.startswith("\n"):
@@ -24,7 +24,7 @@ class Logger:
             self.messages.append(message)
             if message.endswith("\n"):
                 self.messages.append("")
-        
+
         self.log.info(message)
 
 
