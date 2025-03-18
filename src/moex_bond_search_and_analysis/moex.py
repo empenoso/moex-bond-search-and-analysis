@@ -16,7 +16,7 @@ from moex_bond_search_and_analysis.schemas import (
 
 
 class MOEX:
-    # https://iss.moex.com/iss/engines/stock/markets/bonds/boardgroups/
+
     BOARD_GROUPS = [58, 193, 105, 77, 207, 167, 245]
     # Переменная для задержки API запросов, лимит в 50 запросов в минуту
     API_DELAY = 1.2

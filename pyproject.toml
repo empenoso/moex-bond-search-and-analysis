@@ -17,5 +17,20 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=8.3.5",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
     "ruff>=0.9.10",
 ]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+addopts = [
+    "--durations=10",
+    "--cov=.",
+    "--cov-branch",
+]
+pythonpath = "src"
+
