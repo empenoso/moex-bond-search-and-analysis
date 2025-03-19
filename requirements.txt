@@ -1,0 +1,6 @@
+requests
+pandas
+openpyxl
+humanize
+emoji
+feedparser
