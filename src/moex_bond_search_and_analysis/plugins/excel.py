@@ -75,6 +75,7 @@ class ExcelSource:
             "Объем сделок с 15 дней, шт.",
             "Доходность",
             "Дюрация, месяцев",
+            "XIRR"
         ]
         headers_bonds.extend(MONTH_NAMES_RU_FULL)
         sheet_bonds.append(headers_bonds)

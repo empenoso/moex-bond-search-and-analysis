@@ -20,6 +20,18 @@ class Bond:
     payments_data: dict[str, str] = field(
         metadata={"description": "Отметки о выплатах"}
     )
+    accrued_interest: float = field( # 5
+        metadata={"description": "Накопленный купонный доход"}
+    )
+    lot_value: float = field( # 6
+        metadata={"description": "Номинал"}
+    )
+    xirr: float = field(
+        default=0.0,
+        metadata={
+            "description": "XIRR - доходность с учетом всех выплат и налогов, "
+            "рассчитанная на основе кэш-флоу. "
+        })
 
     @property
     def as_list(self):
@@ -31,6 +43,7 @@ class Bond:
             self.volume,
             self.yield_,
             self.duration,
+            self.xirr,
         ]
         lst.extend(
             [
