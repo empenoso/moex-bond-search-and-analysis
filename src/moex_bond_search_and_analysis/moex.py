@@ -14,12 +14,18 @@ from moex_bond_search_and_analysis.schemas import (
     Bond,
 )
 
+from moex_bond_search_and_analysis.utils import (
+    RateLimiter,
+    calculate_XIRR
+)
 
 class MOEX:
 
     BOARD_GROUPS = [58, 193, 105, 77, 207, 167, 245]
+    
     # Переменная для задержки API запросов, лимит в 50 запросов в минуту
-    API_DELAY = 1.2
+    API_DELAY = 0.15
+    limiter = RateLimiter(API_DELAY)
 
     def __init__(self, log: Logger):
         self.log = log
@@ -38,14 +44,14 @@ class MOEX:
         for t in self.BOARD_GROUPS:
             url = (
                 f"https://iss.moex.com/iss/engines/stock/markets/bonds/boardgroups/{t}/securities.json"
-                "?iss.dp=comma&iss.meta=off&iss.only=securities,marketdata&"
-                "securities.columns=SECID,SECNAME,PREVLEGALCLOSEPRICE&marketdata.columns=SECID,YIELD,DURATION"
+                "?iss.dp=comma&iss.meta=off&iss.only=securities,marketdata"
+                "&securities.columns=SECID,SECNAME,PREVLEGALCLOSEPRICE,MATDATE,OFFERDATE,ACCRUEDINT,LOTVALUE&marketdata.columns=SECID,YIELD,DURATION,MARKETPRICE"
             )
             self.log.info(
                 f"🔗 {foo_name}. Ссылка поиска всех доступных облигаций группы: {url}."
             )
 
-            time.sleep(self.API_DELAY)
+            self.limiter.wait_if_needed()
 
             try:
                 response = requests.get(url)
@@ -82,7 +88,6 @@ class MOEX:
                     try:
                         bond_name = bond_list[i][1].replace('"', "").replace("'", "")
                         secid = bond_list[i][0]
-                        bond_price = bond_list[i][2]
 
                         bond_market_data = market_data_dict.get(secid)
                         if not bond_market_data:
@@ -92,22 +97,44 @@ class MOEX:
                                 "Данные о доходности и дюрации отсутствуют."
                             )
                             break
+                        
+                        bond_price = bond_market_data[3]
+                        if bond_list[i][2]:
+                            bond_price = bond_list[i][2]
 
                         bond_yield = bond_market_data[1]
                         # кол-во оставшихся месяцев, делим на 30 если есть значение, иначе 0
-                        bond_duration = (
-                            bond_market_data[2] / 30 if bond_market_data[2] else 0
-                        )
+                        bond_duration = 0
+                        if bond_market_data[2]:
+                            bond_duration = bond_market_data[2] / 30
+
+                        # Вычислить количество дней до погашения, если есть дата погашения в формате "YYYY-MM-DD"
+                        maturity_date_str = bond_list[i][3]
+                        days_to_maturity = None
+                        if maturity_date_str:
+                            try:
+                                maturity_date = datetime.strptime(maturity_date_str, "%Y-%m-%d")
+                                days_to_maturity = (maturity_date - datetime.now()).days
+                            except Exception:
+                                days_to_maturity = None
+
+                        if days_to_maturity is not None:
+                            bond_duration = days_to_maturity / 30  # Преобразуем в месяцы
+
                         bond_duration = round(bond_duration * 100) / 100
+
+                        offer_date = bond_list[i][4]
 
                         self.log.info(
                             f"🔎 {foo_name} в {datetime.now().strftime('%H:%M:%S')}. "
                             f"Строка {i + 1} из {count}: {bond_name} ({secid}): "
                             f"цена={bond_price}%, доходность={bond_yield}%, дюрация={bond_duration} мес."
+                            f"оферта={offer_date}"
                         )
 
                         condition = (
                             bond_yield is not None
+                            and offer_date is None
                             and conditions.yield_more
                             <= bond_yield
                             <= conditions.yield_less
@@ -125,6 +152,7 @@ class MOEX:
                                 f"доходности ({conditions.yield_more} < {bond_yield}% < {conditions.yield_less}), "
                                 f"цены ({conditions.price_more} < {bond_price}% < {conditions.price_less}) и "
                                 f"дюрации ({conditions.duration_more} < {bond_duration} мес. < {conditions.duration_less}) "
+                                f"и нет оферты "
                                 f"для {bond_name} прошло."
                             )
                             volume_data = self.search_volume(
@@ -156,6 +184,8 @@ class MOEX:
                                     yield_=bond_yield,
                                     duration=bond_duration,
                                     payments_data=payments_data.months_payment_marks,  # XXX: похоже тут надо распаковать словарь
+                                    accrued_interest= bond_list[i][5],  # Накопленный купонный доход
+                                    lot_value=bond_list[i][6],  # Номинал
                                 )
                                 if (
                                     conditions.offer_yes_no == "ДА"
@@ -168,6 +198,13 @@ class MOEX:
                                     self.log.info(
                                         f"⭐ {foo_name}. Результат № {len(bonds)}: {bonds[-1]}."
                                     )
+                                    
+                                    cash_flow = self.process_bonds([(secid, 1)])
+                                    bond_instance.xirr = calculate_XIRR(bond_instance, cash_flow)
+                                    self.log.info(
+                                        f"📈 {foo_name}. XIRR для {bond_name} ({secid}): {bond_instance.xirr:.2%}."
+                                    )
+
                                 elif conditions.offer_yes_no == "НЕТ":
                                     bonds.append(bond_instance)
                                     self.log.info(
@@ -193,14 +230,14 @@ class MOEX:
                         self.log.info(
                             f"\n⚠️ Ошибка при обработке строки {i + 1}: {e}.\n🔄 Попытка {retry_count} из 5. Ожидание 60 секунд.\n"
                         )
-                        time.sleep(60)
+                        self.limiter.wait_if_needed()
                     except Exception as e:
                         retry_count += 1
                         moex_error_counter += 1
                         self.log.info(
                             f"\n🔥 Непредвиденная ошибка при обработке строки {i + 1}: {e}.\n🔄 Попытка {retry_count} из 5. Ожидание 60 секунд.\n"
                         )
-                        time.sleep(60)
+                        self.limiter.wait_if_needed()
 
         if not bonds:
             self.log.info(f"📭 {foo_name}. В массиве нет строк.")
@@ -241,7 +278,7 @@ class MOEX:
             f"🔗 {foo_name}. Ссылка для поиска объёма сделок {security_id}: {url}"
         )
         try:
-            time.sleep(self.API_DELAY)
+            self.limiter.wait_if_needed()
 
             response = requests.get(url)
             response.raise_for_status()
@@ -293,7 +330,7 @@ class MOEX:
         foo_name = "moex_board_id"
         url = f"https://iss.moex.com/iss/securities/{security_id}.json?iss.meta=off&iss.only=boards&boards.columns=secid,boardid,is_primary"
         try:
-            time.sleep(self.API_DELAY)
+            self.limiter.wait_if_needed()
 
             response = requests.get(url)
             response.raise_for_status()
@@ -329,7 +366,7 @@ class MOEX:
             f"🔗 {foo_name}. Ссылка для поиска месяцев выплат для {security_id}: {url}."
         )
         try:
-            time.sleep(self.API_DELAY)
+            self.limiter.wait_if_needed()
 
             response = requests.get(url)
             response.raise_for_status()
@@ -391,7 +428,7 @@ class MOEX:
             f"🔗 {foo_name}. Ссылка для поиска общей информации по {security_id}: {url}"
         )
         try:
-            time.sleep(self.API_DELAY)
+            self.limiter.wait_if_needed()
 
             response = requests.get(url)
             response.raise_for_status()
@@ -501,7 +538,7 @@ class MOEX:
 
             if coupon_datetime > datetime.now():
                 value_rub = float(coupon[value_rub_idx] or 0) * number
-                flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub]
+                flow = [f"{name} (купон 🏷️)", isin, coupon_datetime, value_rub, "coupon"]
                 cash_flow.append(flow)
                 self.log.info(f"Добавлен купон: {flow}")
 
@@ -533,7 +570,7 @@ class MOEX:
 
             if amort_datetime > datetime.now():
                 value_rub = float(amort[value_rub_idx] or 0) * number
-                flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub]
+                flow = [f"{name} (номинал 💯)", isin, amort_datetime, value_rub, "amortization"]
                 cash_flow.append(flow)
                 self.log.info(f"Добавлена выплата номинала: {flow}")
 
@@ -542,7 +579,6 @@ class MOEX:
     def fetch_company_names(self, df: pd.DataFrame) -> list[str]:
         """🔄 Получает названия компаний по тикерам облигаций."""
         company_names = []
-        delay_between_calls = 0.5  # секунды
         for ticker in df.iloc[:, 0]:
             url = f"https://iss.moex.com/iss/securities.json?q={ticker}&iss.meta=off"
             self.log.info(f"\n🔍 Обрабатываем тикер: {ticker}")
@@ -566,7 +602,7 @@ class MOEX:
             except (requests.RequestException, IndexError, KeyError) as e:
                 self.log.info(f"❌ Ошибка при обработке {ticker}: {e}")
 
-            time.sleep(delay_between_calls)
+            self.limiter.wait_if_needed()
 
         # 🔄 Удаляем дубликаты, сохраняя порядок
         company_names = list(dict.fromkeys(company_names))
