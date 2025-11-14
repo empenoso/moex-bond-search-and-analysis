@@ -1,8 +1,9 @@
 from moex_bond_search_and_analysis.app import App
+from moex_bond_search_and_analysis.schemas import SearchByCriteriaConditions
 from moex_bond_search_and_analysis.utils import setup_encoding
 
 
-def start(script_number: None | int = None):
+def start(script_number: None | int = None, search_conditions: SearchByCriteriaConditions | None = None):
     if script_number is None:
         script_number = int(input(
             "1 - Поиск облигаций по критериям\n"
@@ -13,13 +14,19 @@ def start(script_number: None | int = None):
         ))
 
     app = App()
-    scripts = {
-        1: app.search_by_criteria,
-        2: app.search_coupons,
-        3: app.search_news,
-        4: app.calc_purchase_volume,
-    }
-    scripts[script_number]()
+    
+    if script_number == 1:
+        # Для первого скрипта передаем условия поиска
+        app.search_by_criteria(search_conditions=search_conditions)
+    elif script_number == 2:
+        app.search_coupons()
+    elif script_number == 3:
+        app.search_news()
+    elif script_number == 4:
+        app.calc_purchase_volume()
+    else:
+        print("Выбран неверный номер скрипта.")
+
     print("\nМихаил Шардин https://shardin.name/\n")
     input("Нажмите Enter для выхода...")
 

@@ -22,8 +22,12 @@ class App:
         self.moex = MOEX(log=self.log)
 
     @measure_method_duration
-    def search_by_criteria(self):
-        search_conditions = SearchByCriteriaConditions()
+    def search_by_criteria(self, search_conditions: SearchByCriteriaConditions | None = None):
+        if search_conditions is None:
+            # Если критерии не переданы, используются значения по умолчанию
+            self.log.info("Критерии поиска не были переданы, используются значения по умолчанию.")
+            search_conditions = SearchByCriteriaConditions()
+            
         moex_search_bonds_result = self.moex.search_bonds(conditions=search_conditions)
         if moex_search_bonds_result:
             output_source = ExcelSource(
